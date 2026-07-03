@@ -380,6 +380,11 @@ textarea {
   font-size: 0.82rem;
 }
 
+.required-star {
+  color: #d92d20;
+  font-weight: 800;
+}
+
 .table-scroll-area {
   position: relative;
 }
@@ -556,6 +561,10 @@ td:last-child {
   padding: 16px;
 }
 
+.simple-company-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .company-form label {
   color: #344054;
   display: grid;
@@ -579,6 +588,12 @@ td:last-child {
   display: flex;
   gap: 8px;
   grid-column: 2;
+  justify-content: flex-end;
+}
+
+.modal-row-controls {
+  display: flex;
+  gap: 8px;
   justify-content: flex-end;
 }
 

@@ -1,15 +1,22 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class CompanyBase(BaseModel):
     company_name: str = Field(..., min_length=1, max_length=255)
-    email: EmailStr
-    phone: str = Field(..., min_length=1, max_length=20)
-    address: str = Field(..., min_length=1)
-    industry: str = Field(..., min_length=1, max_length=100)
-    website: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=20)
+    address: str | None = None
+    industry: str = Field(default="Private sector", min_length=1, max_length=100)
+    website: str | None = Field(default=None, max_length=255)
+
+    @field_validator("email", "phone", "address", "website", mode="before")
+    @classmethod
+    def empty_string_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class CompanyCreate(CompanyBase):
@@ -21,7 +28,7 @@ class CompanyRead(BaseModel):
 
     id: int
     company_name: str
-    email: EmailStr
+    email: EmailStr | None = None
     phone: str | None = None
     address: str | None = None
     industry: str | None = None

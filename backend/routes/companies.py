@@ -28,17 +28,17 @@ DUPLICATE_FIELDS = (
 
 
 def clean_company_payload(company: CompanyCreate) -> dict:
-    website = company.website.strip()
+    website = (company.website or "").strip()
     if website and not website.startswith(("http://", "https://")):
         website = f"https://{website}"
 
     return {
         "company_name": company.company_name.strip(),
-        "email": company.email.lower(),
-        "phone": company.phone.strip(),
-        "address": company.address.strip(),
+        "email": company.email.lower() if company.email else None,
+        "phone": company.phone.strip() if company.phone else None,
+        "address": company.address.strip() if company.address else None,
         "industry": company.industry.strip(),
-        "website": website,
+        "website": website or None,
     }
 
 
@@ -57,6 +57,8 @@ def reject_duplicate_payload(companies: list[CompanyCreate]) -> None:
     for index, company in enumerate(companies):
         payload = clean_company_payload(company)
         for field, _, label in DUPLICATE_FIELDS:
+            if not payload[field]:
+                continue
             value = payload[field].lower()
             if value in seen[field]:
                 raise HTTPException(
@@ -76,6 +78,8 @@ def reject_existing_duplicate(
     exclude_company_id: int | None = None,
 ) -> None:
     for field, column, label in DUPLICATE_FIELDS:
+        if not payload[field]:
+            continue
         statement = select(Company).where(func.lower(column) == payload[field].lower())
         if exclude_company_id is not None:
             statement = statement.where(Company.id != exclude_company_id)

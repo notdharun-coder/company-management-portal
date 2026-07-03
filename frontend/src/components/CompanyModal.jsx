@@ -11,6 +11,8 @@ const emptyCompany = {
   website: "",
 };
 
+const DEFAULT_ADD_ROWS = 5;
+
 function toFormRow(company) {
   if (!company) {
     return { ...emptyCompany };
@@ -30,6 +32,50 @@ function companyDisplayName(row) {
   return row.company_name.trim() || row.email.trim() || row.phone.trim() || "this company";
 }
 
+function createEmptyRows(count) {
+  return Array.from({ length: count }, () => ({ ...emptyCompany }));
+}
+
+function rowHasUserInput(row) {
+  return Boolean(
+    row.company_name.trim() ||
+    row.email.trim() ||
+    row.phone.trim() ||
+    row.address.trim() ||
+    row.website.trim()
+  );
+}
+
+function optionalText(value) {
+  const trimmedValue = value.trim();
+  return trimmedValue || null;
+}
+
+function apiErrorMessage(detail) {
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    const message = detail
+      .map((item) => item.msg || item.message)
+      .filter(Boolean)
+      .join(" ");
+
+    if (message.includes("Input should be a valid string")) {
+      return "Please restart the backend server, then try saving again.";
+    }
+
+    return message || "Unable to save company.";
+  }
+
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.detail || "Unable to save company.";
+  }
+
+  return "Unable to save company.";
+}
+
 export default function CompanyModal({
   company,
   mode = "add",
@@ -38,8 +84,9 @@ export default function CompanyModal({
   onToast,
 }) {
   const isEditMode = mode === "edit";
-  const [rows, setRows] = useState([toFormRow(company)]);
-  const [errors, setErrors] = useState([{}]);
+  const initialRows = isEditMode ? [toFormRow(company)] : createEmptyRows(DEFAULT_ADD_ROWS);
+  const [rows, setRows] = useState(initialRows);
+  const [errors, setErrors] = useState(initialRows.map(() => ({})));
   const [saving, setSaving] = useState(false);
   const rowRefs = useRef([]);
   const pendingScrollIndex = useRef(null);
@@ -69,6 +116,14 @@ export default function CompanyModal({
     setErrors(errors.filter((_, rowIndex) => rowIndex !== index));
   }
 
+  function removeLastRow() {
+    if (rows.length <= DEFAULT_ADD_ROWS) {
+      return;
+    }
+
+    removeRow(rows.length - 1);
+  }
+
   function validate() {
     const seen = {
       company_name: new Map(),
@@ -76,23 +131,35 @@ export default function CompanyModal({
       phone: new Map(),
     };
     let firstInvalidIndex = -1;
+    const rowsToSave = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => rowHasUserInput(row));
 
-    const nextErrors = rows.map((row, index) => {
+    const nextErrors = rows.map((row) => {
+      if (!rowHasUserInput(row)) {
+        return {};
+      }
+
       return {
         company_name: row.company_name.trim() ? "" : "Company name is required",
-        email: row.email.trim() ? "" : "Company email is required",
-        phone: row.phone.trim() ? "" : "Company phone number is required",
-        address: row.address.trim() ? "" : "Address is required",
-        website: row.website.trim() ? "" : "Company website is required",
+        email: "",
+        phone: "",
+        address: "",
+        website: "",
       };
     });
+
+    if (rowsToSave.length === 0) {
+      nextErrors[0].company_name = "Company name is required";
+      firstInvalidIndex = 0;
+    }
 
     [
       ["company_name", "Company name"],
       ["email", "Company email"],
       ["phone", "Company phone number"],
     ].forEach(([field, label]) => {
-      rows.forEach((row, index) => {
+      rowsToSave.forEach(({ row, index }) => {
         const value = String(row[field] || "").trim().toLowerCase();
         if (!value) {
           return;
@@ -131,13 +198,15 @@ export default function CompanyModal({
       pendingScrollIndex.current = firstInvalidIndex;
     }
 
-    return nextErrors.every((row) => (
+    const allValid = nextErrors.every((row) => (
       !row.company_name &&
       !row.email &&
       !row.phone &&
       !row.address &&
       !row.website
     ));
+
+    return allValid ? rowsToSave.map(({ row }) => row) : null;
   }
 
   function scrollToDuplicateValue(field, value, message) {
@@ -163,27 +232,28 @@ export default function CompanyModal({
 
   async function submit(event) {
     event.preventDefault();
-    if (!validate()) {
+    const validRows = validate();
+    if (!validRows) {
       onToast("Please fix the highlighted company details.", "error");
       return;
     }
 
     setSaving(true);
     try {
-      const cleanedRows = rows.map((row) => ({
+      const cleanedRows = validRows.map((row) => ({
         ...row,
         company_name: row.company_name.trim(),
-        email: row.email.trim(),
-        phone: row.phone.trim(),
-        address: row.address.trim(),
+        email: optionalText(row.email),
+        phone: optionalText(row.phone),
+        address: optionalText(row.address),
         industry: row.industry.trim(),
-        website: row.website.trim(),
+        website: optionalText(row.website),
       }));
       await onSave(isEditMode ? cleanedRows[0] : cleanedRows);
     } catch (error) {
       const detail = error.response?.data?.detail || "Unable to save company.";
       const didScroll = scrollToBackendError(detail);
-      const message = typeof detail === "string" ? detail : detail.message;
+      const message = apiErrorMessage(detail);
       onToast(didScroll ? "Duplicate record found." : message, "error");
     } finally {
       setSaving(false);
@@ -209,16 +279,35 @@ export default function CompanyModal({
               row={row}
               index={index}
               errors={errors[index] || {}}
-              canAdd={!isEditMode}
-              canRemove={!isEditMode && rows.length > 1}
+              simple={!isEditMode}
               formRef={(element) => {
                 rowRefs.current[index] = element;
               }}
               onChange={updateRow}
-              onAdd={addRow}
-              onRemove={removeRow}
             />
           ))}
+
+          {!isEditMode && (
+            <div className="modal-row-controls">
+              <button
+                type="button"
+                className="row-action-button add-row-button"
+                onClick={addRow}
+                aria-label="Add company row"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="row-action-button remove-row-button"
+                disabled={rows.length <= DEFAULT_ADD_ROWS}
+                onClick={removeLastRow}
+                aria-label="Remove last company row"
+              >
+                -
+              </button>
+            </div>
+          )}
         </div>
 
         <footer className="modal-footer">

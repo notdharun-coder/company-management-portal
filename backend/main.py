@@ -2,12 +2,17 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from database import Base, engine
 from routes.auth import router as auth_router
 from routes.companies import router as companies_router
 
 Base.metadata.create_all(bind=engine)
+
+if engine.dialect.name == "mysql":
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE companies MODIFY email VARCHAR(255) NULL"))
 
 app = FastAPI(title="Company Management Portal API")
 
