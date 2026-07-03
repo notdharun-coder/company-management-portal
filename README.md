@@ -51,6 +51,13 @@ company-portal/
 
 ## Getting Started
 
+### Clone the repo
+
+```bash
+git clone https://github.com/notdharun-coder/company-management-portal.git
+cd company-management-portal
+```
+
 ### Prerequisites
 - Python 3.11, 3.12, or 3.13 (3.14 currently breaks the `pydantic-core` install)
 - Node.js + npm
@@ -68,6 +75,8 @@ python run_server.py
 ```
 
 ### Database
+
+The schema automatically creates a database named `company_portal` — make sure this matches the database name in your backend `.env` file.
 
 ```bash
 mysql -u root -p < db/schema.sql
